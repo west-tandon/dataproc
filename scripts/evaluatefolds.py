@@ -67,6 +67,7 @@ def eval_fold(*, results, qrels_path, fold_path, budget, decay_factor,
                                  trec_in_path=trec_in_path)
     return p10, map_measure, avg_cost / nbuckets
 
+
 def main():
     """Main function"""
     parser = argparse.ArgumentParser(
@@ -76,7 +77,7 @@ def main():
     parser.add_argument('dir', help='Directory containing folds.')
     parser.add_argument('--folds', '-k', default=10, type=int,
                         help='The number of folds to run.')
-    parser.add_argument('--budget', type=int, required=True,
+    parser.add_argument('--budget', type=float, required=True,
                         help='The number of shards to select.')
     parser.add_argument('--decay-factor', '-d', default=1, type=float,
                         help='The decay factor in selecting buckets.')
