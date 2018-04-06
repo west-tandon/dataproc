@@ -26,8 +26,6 @@ def parse_cmd_args():
                         help='The number of folds to run.')
     parser.add_argument('--budget', type=float, required=True,
                         help='The number of shards to select.')
-    parser.add_argument('--decay-factor', '-d', default=1, type=float,
-                        help='The decay factor in selecting buckets.')
     parser.add_argument('--header', '-H', action='store_true',
                         help='Print CSV header.')
     parser.add_argument('--buckets', default=1, type=int,
