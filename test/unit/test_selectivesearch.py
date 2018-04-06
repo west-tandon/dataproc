@@ -13,7 +13,8 @@ from dataproc.selectivesearch import (select,
                                       decayed_buckets,
                                       select_buckets,
                                       resolve_bucket_selection,
-                                      calc_prefix_bucket_costs)
+                                      calc_prefix_bucket_costs,
+                                      apply_cost_model)
 
 @pytest.fixture
 def results():
@@ -43,6 +44,7 @@ def bucket_selection():
         'cost': [1] * 12
     })
 
+
 def test_select_all(results, selection):
     cost, selected = select(selection, results.drop(columns='bucket'), 3)
     expected = (results.drop(columns='bucket')
@@ -50,6 +52,7 @@ def test_select_all(results, selection):
                 .reset_index(drop=True))
     assert selected[['query', 'score', 'shard']].equals(expected)
     assert cost == 3
+
 
 def test_select_one(results, selection):
     cost, selected = select(selection, results.drop(columns='bucket'), 1)
@@ -71,6 +74,7 @@ def test_decayed_buckets():
     with pytest.raises(AssertionError):
         decayed_buckets(10, 5, 1.1)
 
+
 def test_select_with_decay(results, selection):
     selected = select_with_decay(selection, results, 3, 0.5)
     expected = pd.DataFrame({
@@ -80,6 +84,7 @@ def test_select_with_decay(results, selection):
         'score': [5, 4, 3, 2] + [5, 5, 4, 2]
     })
     assert selected.equals(expected), selected
+
 
 def test_select_buckets(results, bucket_selection):
     cost, selected = select_buckets(bucket_selection, results, 3)
@@ -93,6 +98,7 @@ def test_select_buckets(results, bucket_selection):
     assert selected.equals(expected), selected
     assert cost == 3
 
+
 def test_resolve_bucket_selection(bucket_selection):
     cost, contiguous_selection = resolve_bucket_selection(bucket_selection, 3)
     expected = pd.DataFrame({
@@ -105,6 +111,7 @@ def test_resolve_bucket_selection(bucket_selection):
     assert contiguous_selection.equals(expected)
     assert cost == 3
 
+
 def test_calc_prefix_bucket_costs(bucket_selection):
     bucket_costs = calc_prefix_bucket_costs(bucket_selection)
     expected =  pd.DataFrame({
@@ -115,7 +122,27 @@ def test_calc_prefix_bucket_costs(bucket_selection):
                 'cost': [1] * 12,
                 'prefix_cost': [1, 2] * 6
             })
-    print(bucket_costs)
-    print(expected)
     assert (bucket_costs.reindex(sorted(bucket_costs.columns), axis=1)
             .equals(expected.reindex(sorted(expected.columns), axis=1)))
+
+
+def test_apply_cost_model_query_independent():
+    selection = pd.DataFrame({
+        'query': [0, 0, 0] + [1, 1, 1],
+        'shard': list(range(3)) * 2,
+        'rank': [0, 2, 1] + [2, 1, 0],
+        'shard_score': [1] * 6
+    })
+    selection = apply_cost_model(selection, pd.DataFrame({
+        'shard': [0, 1, 2],
+        'cost':  [1, 2, 4]
+    }))
+    expected = pd.DataFrame({
+        'query': [0, 0, 0] + [1, 1, 1],
+        'shard': list(range(3)) * 2,
+        'rank': [0, 2, 1] + [2, 1, 0],
+        'shard_score': [1, 0.5, 0.25] * 2
+    })
+    print(selection)
+    print(expected)
+    assert selection.equals(expected)

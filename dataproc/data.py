@@ -67,9 +67,11 @@ def to_svmrank(data, path, *, label='shard_score'):
     if 'query' in svmdata.columns:
         svmdata.rename(columns={'query': 'qid'}, inplace=True)
     ensure_has_columns(svmdata, ['qid', label])
-    feature_columns = list(set(svmdata.columns).difference(['qid', label]))
+    feature_columns = [col for col in svmdata.columns
+                       if col not in {'qid', label}]
     svmdata = svmdata[[label, 'qid'] + feature_columns]
     columns = [label, 'qid'] + list(range(1, len(feature_columns) + 1))
-    for column in columns[1:]:
-        svmdata[column] = svmdata[column].apply(lambda v, c=column: f'{c}:{v}')
+    for col, mapped in zip(svmdata.columns[2:], columns[2:]):
+        svmdata[col] = svmdata[col].apply(lambda v, c=mapped: f'{c}:{v}')
+    svmdata['qid'] = svmdata['qid'].apply(lambda v: f'qid:{int(v)}')
     svmdata.to_csv(path, header=False, sep=' ', index=False)

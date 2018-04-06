@@ -170,3 +170,17 @@ def select_buckets(selection, results, budget):
             .sort_values(['query', 'score'], ascending=[True, False])
             .reset_index(drop=True))
     return avg_cost, data
+
+
+def apply_cost_model(data, cost_model, *, score_column='shard_score'):
+    """Modifies `data` according to `cost_model`.
+
+    If `cost_model` is None, no changes are made.
+    Otherwise, it is joined with `data` and each shard score is divided
+    by its cost. These can be either query-dependend or independent."""
+    if cost_model is not None:
+        data = pd.merge(data, cost_model).sort_values(['query', 'shard'])
+        data.reset_index(inplace=True, drop=True)
+        data[score_column] /= data['cost']
+        data.drop(columns=['cost'], inplace=True)
+    return data
