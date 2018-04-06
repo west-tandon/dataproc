@@ -1,0 +1,14 @@
+sudo: false
+language: python
+python:
+    - "3.6"
+install: pip install tox-travis
+env:
+  matrix:
+    - TOXENV=py36
+    - TOXENV=vulture
+    - TOXENV=flake8
+    - TOXENV=pylint
+    - TOXENV=pyroma
+script: tox
+  - tox -e $TOXENV

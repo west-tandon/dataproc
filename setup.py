@@ -5,10 +5,4 @@ setup(name='dataproc',
       description='Data processing tools',
       download_url='https://github.com/west-tandon/dataproc',
       license='MIT',
-      packages=find_packages(),
-      install_requires=[
-          #'scikit-learn',
-          #'scipy',
-          'pandas',
-          #'pyarrow'
-      ])
+      packages=find_packages())

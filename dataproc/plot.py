@@ -1,12 +1,12 @@
-import pandas as pd
-import pyarrow as pa
-import pyarrow.parquet as pq
-import matplotlib.pyplot as plt
-from matplotlib import pylab
+"""Plotting tools."""
+import matplotlib.pyplot as plt  # pylint: disable=import-error
 
 
-def plot_and_show(data, x, y, labels=None, axis=None, style='.-', size=None):
-    handles = [plt.plot(line[x], line[y], style)[0] for line in data]
+def plot_and_show(data, x_column, y_column, *,
+                  labels=None, axis=None, style='.-', size=None):
+    """Plots and shows data: for use in Jupyter Notebook."""
+    handles = [plt.plot(line[x_column], line[y_column], style)[0]
+               for line in data]
     if axis:
         plt.axis(axis)
     if labels:
