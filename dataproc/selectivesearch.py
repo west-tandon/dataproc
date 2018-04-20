@@ -56,7 +56,7 @@ def load_shard_results(basename, nshards, nbuckets=1):
     ])
 
 
-def select(selection, results, budget):
+def select(selection, results, budget, nonempty=False):
     """Selects results from the top shards within `budget` according to
     `selection`."""
     ensure_has_columns(selection, ['rank', 'query', 'shard'])
@@ -64,12 +64,14 @@ def select(selection, results, budget):
     selection.sort_values(['query', 'rank'], inplace=True)
     selection['cumulative_cost'] = selection.groupby('query')['cost'].cumsum()
     budget_condition = selection['cumulative_cost'] <= budget
-    within_budget = selection[budget_condition][['query', 'shard', 'cost']]
-    avg_cost = within_budget.groupby('query')['cost'].sum().mean()
-    return (avg_cost,
-            (pd.merge(results, within_budget, on=['query', 'shard'])
-             .sort_values(['query', 'score'], ascending=[True, False])
-             .reset_index(drop=True)))
+    if nonempty:
+        budget_condition |= selection['cumulative_cost'] == selection['cost']
+    within_budget = selection[budget_condition]
+    return (within_budget,
+            pd.merge(results, within_budget[['query', 'shard', 'cost']],
+                     on=['query', 'shard'])
+            .sort_values(['query', 'score'], ascending=[True, False])
+            .reset_index(drop=True))
 
 
 def decayed_buckets(num_buckets, num_shards, decay_factor):
@@ -163,13 +165,15 @@ def select_buckets(selection, results, budget):
     """Selects buckets."""
     ensure_has_columns(selection, ['rank', 'query', 'shard', 'bucket'])
     ensure_has_columns(results, ['score', 'query', 'shard', 'bucket'])
-    avg_cost, bucket_selection = resolve_bucket_selection(selection, budget)
+    _, bucket_selection = resolve_bucket_selection(selection, budget)
+    bucket_selection = pd.merge(bucket_selection, selection,
+                                on=['query', 'shard', 'bucket'])
     data = (pd.merge(results,
                      bucket_selection[['query', 'shard', 'bucket']],
                      on=['query', 'shard', 'bucket'])
             .sort_values(['query', 'score'], ascending=[True, False])
             .reset_index(drop=True))
-    return avg_cost, data
+    return bucket_selection, data
 
 
 def apply_cost_model(data, cost_model, *, score_column='shard_score'):
@@ -181,6 +185,6 @@ def apply_cost_model(data, cost_model, *, score_column='shard_score'):
     if cost_model is not None:
         data = pd.merge(data, cost_model).sort_values(['query', 'shard'])
         data.reset_index(inplace=True, drop=True)
-        data[score_column] /= data['cost']
+        data.loc[data['cost'] > 0, score_column] /= data['cost']
         data.drop(columns=['cost'], inplace=True)
     return data

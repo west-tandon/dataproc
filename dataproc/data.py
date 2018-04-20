@@ -2,6 +2,7 @@
 import functools
 import operator
 import pandas as pd
+import pyarrow.parquet as pq
 import numpy as np
 import sklearn.preprocessing  # pylint: disable=import-error
 
@@ -75,3 +76,12 @@ def to_svmrank(data, path, *, label='shard_score'):
         svmdata[col] = svmdata[col].apply(lambda v, c=mapped: f'{c}:{v}')
     svmdata['qid'] = svmdata['qid'].apply(lambda v: f'qid:{int(v)}')
     svmdata.to_csv(path, header=False, sep=' ', index=False)
+
+
+def load_data(path):
+    """Load CSV or Parquet data file depending on extension."""
+    if path.endswith('.csv'):
+        data = pd.read_csv(path)
+    else:
+        data = pq.read_table(path).to_pandas()
+    return data

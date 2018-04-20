@@ -46,23 +46,33 @@ def bucket_selection():
 
 
 def test_select_all(results, selection):
-    cost, selected = select(selection, results.drop(columns='bucket'), 3)
+    selection, selected = select(selection, results.drop(columns='bucket'), 3)
     expected = (results.drop(columns='bucket')
                 .sort_values(['query', 'score'], ascending=[True, False])
                 .reset_index(drop=True))
     assert selected[['query', 'score', 'shard']].equals(expected)
-    assert cost == 3
+    sel = (selection[['query', 'shard']]
+           .sort_values(['query', 'shard'])
+           .reset_index(drop=True))
+    assert sel.equals(pd.DataFrame({
+        'query': [0, 0, 0, 1, 1, 1],
+        'shard': [0, 1, 2] * 2
+    })[['query', 'shard']])
 
 
 def test_select_one(results, selection):
-    cost, selected = select(selection, results.drop(columns='bucket'), 1)
+    selection, selected = select(selection, results.drop(columns='bucket'), 1)
     expected = pd.DataFrame({
         'query': [0, 0] + [1, 1],
         'shard': [0, 0] + [2, 2],
         'score': [3, 2] + [5, 5]
     })
     assert selected[['query', 'score', 'shard']].equals(expected)
-    assert cost == 1
+    sel = selection[['query', 'shard']].reset_index(drop=True)
+    assert sel.equals(pd.DataFrame({
+        'query': [0, 1],
+        'shard': [0, 2]
+    })[['query', 'shard']])
 
 def test_decayed_buckets():
     assert decayed_buckets(10, 5, 1) == [10] * 5
@@ -87,7 +97,7 @@ def test_select_with_decay(results, selection):
 
 
 def test_select_buckets(results, bucket_selection):
-    cost, selected = select_buckets(bucket_selection, results, 3)
+    selection, selected = select_buckets(bucket_selection, results, 3)
     expected = (pd.DataFrame({
         'query':  [0, 0, 0] + [1, 1, 1],
         'shard':  [0, 1, 2] + [0, 0, 1],
@@ -96,7 +106,11 @@ def test_select_buckets(results, bucket_selection):
     }).sort_values(['query', 'score'], ascending=[True, False])
       .reset_index(drop=True))
     assert selected.equals(expected), selected
-    assert cost == 3
+    assert selection[['query', 'shard', 'bucket']].equals(pd.DataFrame({
+        'query':  [0, 0, 0] + [1, 1, 1],
+        'shard':  [0, 1, 2] + [0, 0, 1],
+        'bucket': [0, 0, 0] + [0, 1, 0]
+    })[['query', 'shard', 'bucket']])
 
 
 def test_resolve_bucket_selection(bucket_selection):
@@ -143,6 +157,4 @@ def test_apply_cost_model_query_independent():
         'rank': [0, 2, 1] + [2, 1, 0],
         'shard_score': [1, 0.5, 0.25] * 2
     })
-    print(selection)
-    print(expected)
     assert selection.equals(expected)

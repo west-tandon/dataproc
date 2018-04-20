@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
 
-from dataproc.data import scale_features, to_svmrank
+from dataproc.data import scale_features, to_svmrank, load_data
 from dataproc.selectivesearch import apply_cost_model
 
 
@@ -80,19 +80,10 @@ def create_svmrank_file(data, output_dir, cost_model_path):
             cost_model = pd.read_csv(cost_model_path)
         else:
             cost_model = pq.read_table(cost_model_path).to_pandas()
-        apply_cost_model(data, cost_model)
+        data = apply_cost_model(data, cost_model)
     out_path = os.path.join(output_dir, 'features.svmrank')
     to_svmrank(data.drop(columns=['shard']), out_path)
     return out_path
-
-
-def load_data(path):
-    """Load CSV or Parquet data file depending on extension."""
-    if path.endswith('.csv'):
-        data = pd.read_csv(path)
-    else:
-        data = pq.read_table(path).to_pandas()
-    return data
 
 
 def main():
@@ -105,7 +96,8 @@ def main():
     split = np.split(query_permutation, args.folds)
     data = load_data(args.data)
     if not args.no_feature_scaling:
-        data = scale_features(data, exclude=['query', 'shard_score'])
+        data = scale_features(data, exclude=[
+            'query', 'shard_score', 'shard', 'bucket'])
     feature_file = create_svmrank_file(data, args.output_dir, args.costs)
     for fold, test_queries in enumerate(split):
         run_fold(feature_file,
