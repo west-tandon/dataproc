@@ -58,22 +58,30 @@ def parse_cmd_args():
 def trec_eval(*, fold_path, qrels_path, trec_in_path):
     """Delegates evaluation to `trec_eval` cmd tool."""
     out = subprocess.run(
-        f'trec_eval -q {qrels_path} {trec_in_path}'.split(' '),
+        f'trec_eval -m all_trec -q {qrels_path} {trec_in_path}'.split(' '),
         stdout=subprocess.PIPE)
     trec_out_path = os.path.join(fold_path, 'trec.out')
     with open(trec_out_path, 'bw') as out_file:
         out_file.write(out.stdout)
-    p10, map_measure = None, None
+    p10, p1000, map_measure, ndcg = None, None, None, None
     for line in out.stdout.decode('UTF-8').splitlines():
         p10_re = re.compile(r'P_10\s+all\s+(?P<score>[0-9]+\.[0-9]+).*')
+        p1000_re = re.compile(r'P_1000\s+all\s+(?P<score>[0-9]+\.[0-9]+).*')
         map_re = re.compile(r'map\s+all\s+(?P<score>[0-9]+\.[0-9]+).*')
+        ndcg_re = re.compile(r'ndcg_cut_30\s+all\s+(?P<score>[0-9]+\.[0-9]+).*')
         p10_match = p10_re.match(line)
+        p1000_match = p1000_re.match(line)
         map_match = map_re.match(line)
+        ndcg_match = ndcg_re.match(line)
         if p10_match:
             p10 = float(p10_match.group('score'))
+        if p1000_match:
+            p1000 = float(p1000_match.group('score'))
+        if ndcg_match:
+            ndcg = float(ndcg_match.group('score'))
         if map_match:
             map_measure = float(map_match.group('score'))
-    return p10, map_measure
+    return p10, p1000, map_measure, ndcg
 
 
 def eval_fold(*, selection, results, qrels_path, fold_path, budget,
@@ -131,7 +139,9 @@ def load_selection(fold_path, nshards, nbuckets, cost_data):
 class Stats(object):
     """Statistics for a fold."""
     p10 = attr.ib(default=0.0)
+    p1000 = attr.ib(default=0.0)
     map1k = attr.ib(default=0.0)
+    ndcg30 = attr.ib(default=0.0)
     shards = attr.ib(default=0)
     size_cost = attr.ib(default=0.0)
     posting_cost = attr.ib(default=0.0)
@@ -142,7 +152,9 @@ class Stats(object):
             raise AttributeError(f'Cannot add {rhs} to a Stats object')
         return Stats(
             self.p10 + rhs.p10,
+            self.p1000 + rhs.p1000,
             self.map1k + rhs.map1k,
+            self.ndcg30 + rhs.ndcg30,
             self.shards + rhs.shards,
             self.size_cost + rhs.size_cost,
             self.posting_cost + rhs.posting_cost,
@@ -158,7 +170,7 @@ def main():
 
     agg = Stats()
     if args.header:
-        print('budget,fold,p10,map,shards,sizecost,postingcost,pcfrac')
+        print('budget,fold,p10,p1000,map,ndcg30,shards,sizecost,postingcost,pcfrac')
     for fold in range(args.folds):
         fold_path = os.path.join(args.dir, f'fold-{fold}')
         selection = load_selection(
@@ -168,7 +180,7 @@ def main():
                      load_data(args.posting_costs),
                      load_data(args.posting_costs_frac))
         )
-        (p10, map1k), filtered_selection = eval_fold(
+        (p10, p1000, map1k, ndcg30), filtered_selection = eval_fold(
             selection=selection,
             results=results,
             qrels_path=args.qrels,
@@ -179,17 +191,22 @@ def main():
         grouped = filtered_selection.groupby('query')
         fold_stats = Stats(
             p10,
+            p1000,
             map1k,
+            ndcg30,
             grouped['unit_cost'].sum().mean(),
             grouped['size_cost'].sum().mean(),
             grouped['posting_cost'].sum().mean(),
             grouped['posting_cost_frac'].sum().mean())
         agg += fold_stats
-        print(args.budget, fold, fold_stats.p10, fold_stats.map1k,
+        print(args.budget, fold, fold_stats.p10, fold_stats.p1000, fold_stats.map1k,
+              fold_stats.ndcg30,
               fold_stats.shards, fold_stats.size_cost, fold_stats.posting_cost,
               fold_stats.posting_cost_frac, sep=',')
     print('Avg. P@10: ', agg.p10 / args.folds, file=sys.stderr)
+    print('Avg. P@1000: ', agg.p1000 / args.folds, file=sys.stderr)
     print('Avg. MAP: ', agg.map1k / args.folds, file=sys.stderr)
+    print('Avg. NDCG@30: ', agg.ndcg30 / args.folds, file=sys.stderr)
     print('Avg. #shards: ', agg.shards / args.folds, file=sys.stderr)
     print('Avg. size cost: ', agg.size_cost / args.folds, file=sys.stderr)
     print('Avg. posting cost: ', agg.posting_cost / args.folds,

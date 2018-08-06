@@ -96,7 +96,7 @@ def main():
     split = np.split(query_permutation, args.folds)
     data = load_data(args.data)
     if not args.no_feature_scaling:
-        data = scale_features(data, exclude=[
+        data, _ = scale_features(data, exclude=[
             'query', 'shard_score', 'shard', 'bucket'])
     feature_file = create_svmrank_file(data, args.output_dir, args.costs)
     for fold, test_queries in enumerate(split):
